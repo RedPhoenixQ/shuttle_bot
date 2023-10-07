@@ -7,12 +7,41 @@ use super::*;
 pub struct TicTacToe {
     state: HashMap<Coord, Tile>,
     winning: Option<Winning>,
+    next_turn: Player,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+
+enum Player {
+    #[default]
+    Opponent,
+    Challenger,
+}
+
+fn next_player(state: &HashMap<Coord, Tile>) -> Player {
+    if state
+        .iter()
+        .filter(|(_, &tile)| tile != Tile::Empty)
+        .count()
+        % 2
+        == 0
+    {
+        Player::Opponent
+    } else {
+        Player::Challenger
+    }
 }
 
 impl TicTacToe {
-    fn new(state: HashMap<Coord, Tile>) -> Self {
-        let winning = calculate_winner(&state);
-        Self { state, winning }
+    fn new(mut state: HashMap<Coord, Tile>, clicked_tile: Option<Coord>) -> Self {
+        if let Some(clicked) = clicked_tile {
+            state.insert(clicked, next_player(&state).into());
+        }
+        Self {
+            next_turn: next_player(&state),
+            winning: calculate_winner(&state),
+            state,
+        }
     }
 }
 
@@ -67,16 +96,12 @@ impl CustomCommand for TicTacToe {
         ctx: Context,
         interaction: message_component::MessageComponentInteraction,
     ) -> Result<()> {
-        let is_challenger =
-            interaction.user.id == interaction.message.interaction.as_ref().unwrap().user.id;
-
-        // Check is challenger because challeger may not be part of the mentions
-        if !is_challenger
-            && !interaction
-                .message
-                .mentions
-                .iter()
-                .any(|user| user.id == interaction.user.id)
+        // Check if user is not part of the game
+        if !interaction
+            .message
+            .mentions
+            .iter()
+            .any(|user| user.id == interaction.user.id)
         {
             interaction
                 .create_interaction_response(&ctx, |res| {
@@ -87,17 +112,47 @@ impl CustomCommand for TicTacToe {
                 })
                 .await?;
             return Ok(());
+        };
+
+        if interaction.data.custom_id == REMOVE_ID {
+            interaction.message.delete(&ctx).await?;
+            interaction
+                .create_interaction_response(&ctx, |res| {
+                    res.interaction_response_data(|data| {
+                        data.content("The game has been removed").ephemeral(true)
+                    })
+                })
+                .await?;
+            return Ok(());
         }
+
+        let challenger = &interaction.message.interaction.as_ref().unwrap().user;
+        let opponent = if interaction.message.mentions.len() == 1 {
+            interaction
+                .message
+                .mentions
+                .iter()
+                .next()
+                .ok_or(anyhow!("There was no mentions"))?
+        } else {
+            interaction
+                .message
+                .mentions
+                .iter()
+                .find(|&user| user != challenger)
+                .ok_or(anyhow!(
+                    "There was no mentions other than the player who created the interaction"
+                ))?
+        };
 
         let clicked_coord: Coord = interaction
             .data
             .custom_id
             .as_str()
             .split_once("_")
-            .unwrap()
+            .ok_or(anyhow!("Invalid customId, does not have a '_'"))?
             .1
-            .try_into()
-            .unwrap();
+            .try_into()?;
 
         let game = TicTacToe::new(
             interaction
@@ -105,69 +160,61 @@ impl CustomCommand for TicTacToe {
                 .components
                 .iter()
                 .flat_map(|row| {
-                    row.components.iter().map(|component| {
+                    row.components.iter().filter_map(|component| {
                         if let component::ActionRowComponent::Button(button) = component {
-                            let coord = button
-                                .custom_id
-                                .as_ref()
-                                .unwrap()
-                                .split_once("_")
-                                .unwrap()
-                                .1
-                                .try_into()
-                                .unwrap();
-                            let tile = match &button.emoji {
-                                Some(e) if e.unicode_eq(X_EMOJI) => Tile::X,
-                                Some(e) if e.unicode_eq(O_EMOJI) => Tile::O,
-                                _ if clicked_coord == coord => {
-                                    if is_challenger {
-                                        Tile::O
-                                    } else {
-                                        Tile::X
-                                    }
-                                }
-                                _ => Tile::Empty,
-                            };
-                            (coord, tile)
+                            button.custom_id.as_ref().and_then(|custom_id| {
+                                let coord = custom_id.split_once("_")?.1.try_into().ok()?;
+                                let tile = match &button.emoji {
+                                    Some(e) if e.unicode_eq(X_EMOJI) => Tile::X,
+                                    Some(e) if e.unicode_eq(O_EMOJI) => Tile::O,
+                                    _ => Tile::Empty,
+                                };
+                                Some((coord, tile))
+                            })
                         } else {
                             unreachable!();
                         }
                     })
                 })
                 .collect(),
+            Some(clicked_coord),
         );
 
         // If you are the challenger and its your turn, the mentions should include you AND your opponent
         // If you are NOT the challenger, the mentions should include ONLY you
-        if is_challenger == (interaction.message.mentions.len() > 1) {
+        if match game.next_turn {
+            Player::Challenger => &interaction.user == challenger,
+            Player::Opponent => &interaction.user == opponent,
+        } {
             interaction
                 .create_interaction_response(&ctx, |res| {
                     res.kind(InteractionResponseType::UpdateMessage)
                         .interaction_response_data(|data| {
-                            data.components(|c| create_components(c, &game)).content(
-                                MessageBuilder::default()
-                                    .push_line(
-                                        interaction.message.content.split_once("\n").unwrap().0,
-                                    )
-                                    .push(if !is_challenger { X_EMOJI } else { O_EMOJI })
-                                    .mention(if game.winning.is_some() {
-                                        &interaction.user
-                                    } else if is_challenger {
-                                        interaction
-                                            .message
-                                            .mentions
-                                            .iter()
-                                            .find(|u| u.id != interaction.user.id)
-                                            .unwrap()
-                                    } else {
-                                        &interaction.message.interaction.as_ref().unwrap().user
+                            let mut msg = MessageBuilder::default();
+
+                            // Preserve first line
+                            msg.push_line(interaction.message.content.split_once("\n").unwrap().0);
+
+                            match &game.winning {
+                                Some(winning) => match winning {
+                                    Winning::Tie => msg.push("The game is a tie"),
+                                    _ => msg
+                                        .mention(match game.next_turn {
+                                            Player::Opponent => &challenger.id,
+                                            Player::Challenger => &opponent.id,
+                                        })
+                                        .push(" is the winner!"),
+                                },
+                                None => msg
+                                    .push(Tile::from(game.next_turn))
+                                    .mention(match game.next_turn {
+                                        Player::Challenger => &challenger.id,
+                                        Player::Opponent => &opponent.id,
                                     })
-                                    .push(if game.winning.is_some() {
-                                        " is the winner!"
-                                    } else {
-                                        "'s turn"
-                                    }),
-                            )
+                                    .push("'s turn"),
+                            };
+                            data.components(|c| create_components(c, &game))
+                                .content(msg)
                         })
                 })
                 .await?;
@@ -187,6 +234,8 @@ impl CustomCommand for TicTacToe {
 const COMPONENT_ROWS: [Row; 3] = [Row::Bottom, Row::Middle, Row::Top];
 const COMPONENT_COLUMNS: [Column; 3] = [Column::Left, Column::Center, Column::Right];
 
+const REMOVE_ID: &str = const_format::formatcp!("{}_{}", TicTacToe::NAME, "_remove");
+
 const X_EMOJI: &str = "❌";
 const O_EMOJI: &str = "⭕";
 const EMPTY_EMOJI: &str = "⬛";
@@ -197,6 +246,15 @@ enum Tile {
     Empty,
     X,
     O,
+}
+
+impl From<Player> for Tile {
+    fn from(value: Player) -> Self {
+        match value {
+            Player::Challenger => Tile::O,
+            Player::Opponent => Tile::X,
+        }
+    }
 }
 
 impl Display for Tile {
@@ -214,6 +272,7 @@ enum Winning {
     Vertical(Column),
     Horizontal(Row),
     Diagonal(Diagonal),
+    Tie,
 }
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
@@ -303,6 +362,10 @@ impl Display for Coord {
 }
 
 fn calculate_winner(state: &HashMap<Coord, Tile>) -> Option<Winning> {
+    if !state.iter().any(|(_, &tile)| tile == Tile::Empty) {
+        return Some(Winning::Tie);
+    }
+
     if let Some(winning) = COMPONENT_COLUMNS.iter().find_map(|&column| {
         match state
             .iter()
@@ -370,6 +433,13 @@ fn create_components<'a, 'b>(
             action_row
         });
     });
+    components.create_action_row(|row| {
+        row.create_button(|btn| {
+            btn.custom_id(REMOVE_ID)
+                .label("Remove")
+                .style(component::ButtonStyle::Danger)
+        })
+    });
     components
 }
 
@@ -393,6 +463,7 @@ fn get_style(id: &Coord, value: &Winning) -> component::ButtonStyle {
 
             _ => false,
         },
+        Winning::Tie => false,
     } {
         component::ButtonStyle::Success
     } else {
