@@ -50,7 +50,8 @@ impl CustomCommand for Purge {
                                     .as_u64()
                                     .to_owned(),
                             )
-                            .await?
+                            .await?;
+                        "One message removed".to_string()
                     }
                     _ => {
                         let message_ids = messages
@@ -58,20 +59,20 @@ impl CustomCommand for Purge {
                             .map(|m| m.id.as_u64().to_owned())
                             .collect::<Vec<u64>>();
 
-                        ctx.http
+                        if let Err(err) = ctx
+                            .http
                             .delete_messages(
                                 channel_id.to_owned(),
                                 &json!({ "messages": message_ids }),
                             )
-                            .await?
+                            .await
+                        {
+                            err.to_string()
+                        } else {
+                            format!("{} messages removed", value)
+                        }
                     }
-                };
-
-                format!(
-                    "{} message{} removed",
-                    value,
-                    if value == 1 { "" } else { "s" }
-                )
+                }
             }
             None => "No messages removed".to_owned(),
         };
