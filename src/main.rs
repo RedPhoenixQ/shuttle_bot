@@ -83,7 +83,11 @@ impl EventHandler for Handler {
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         info!("interaction_create: {:?}", interaction);
-        commands::handle_interaction(ctx, interaction).await;
+        let id = interaction.id();
+        match commands::handle_interaction(ctx, interaction).await {
+            Err(err) => error!("Error handling interaciton {:?}:\n{:?}", id, err),
+            Ok(_) => info!("Handled interaction {:?}", id),
+        };
     }
 
     // async fn message(&self, ctx: Context, message: Message) {
