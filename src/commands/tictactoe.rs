@@ -199,6 +199,10 @@ impl CustomCommand for TicTacToe {
                                 Some(winning) => match winning {
                                     Winning::Tie => msg.push("The game is a tie"),
                                     _ => msg
+                                        .push(Tile::from(match game.next_turn {
+                                            Player::Opponent => Player::Challenger,
+                                            Player::Challenger => Player::Opponent,
+                                        }))
                                         .mention(match game.next_turn {
                                             Player::Opponent => &challenger.id,
                                             Player::Challenger => &opponent.id,
