@@ -96,12 +96,20 @@ impl CustomCommand for TicTacToe {
         ctx: Context,
         interaction: message_component::MessageComponentInteraction,
     ) -> Result<()> {
-        // Check if user is not part of the game
-        if !interaction
+        let challenger = &interaction
             .message
-            .mentions
-            .iter()
-            .any(|user| user.id == interaction.user.id)
+            .interaction
+            .as_ref()
+            .ok_or(anyhow!("There was no interaction on the message"))?
+            .user;
+
+        // Check if user is not part of the game
+        if &interaction.user != challenger
+            && !interaction
+                .message
+                .mentions
+                .iter()
+                .any(|user| user == &interaction.user)
         {
             interaction
                 .create_interaction_response(&ctx, |res| {
@@ -114,6 +122,7 @@ impl CustomCommand for TicTacToe {
             return Ok(());
         };
 
+        // Handle remove game
         if interaction.data.custom_id == REMOVE_ID {
             interaction.message.delete(&ctx).await?;
             interaction
@@ -126,7 +135,6 @@ impl CustomCommand for TicTacToe {
             return Ok(());
         }
 
-        let challenger = &interaction.message.interaction.as_ref().unwrap().user;
         let opponent = if interaction.message.mentions.len() == 1 {
             interaction
                 .message
