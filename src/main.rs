@@ -34,7 +34,7 @@ struct Handler {
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         let commands = commands::command_list();
-
+        info!("Ready event triggered");
         match &self.dev_guild_ids {
             Some(guildids) => {
                 for guild in guildids {
@@ -46,7 +46,7 @@ impl EventHandler for Handler {
                         .expect("Could not set commands");
                 }
 
-                println!("{} is online in test env!", ready.user.name);
+                info!("{} is online in test env!", ready.user.name);
             }
             None => {
                 let current_commands = ctx
@@ -82,6 +82,7 @@ impl EventHandler for Handler {
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        info!("interaction_create: {:?}", interaction);
         commands::handle_interaction(ctx, interaction).await;
     }
 
@@ -95,6 +96,7 @@ impl EventHandler for Handler {
     // }
 
     async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
+        info!("reaction_add create: {:?}", reaction);
         reactions::handle_reaction_add(ctx, reaction).await;
     }
 }
