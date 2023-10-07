@@ -20,16 +20,13 @@ macro_rules! impl_interaction_handler {
             ]
         }
 
-        pub async fn handle_interaction(ctx: Context, interaction: Interaction) {
-            match match interaction {
+        pub async fn handle_interaction(ctx: Context, interaction: Interaction) -> Result<()> {
+            match interaction {
                 Interaction::ApplicationCommand(command) => match command.data.name.as_str() {
                     $(<$cmd>::NAME => <$cmd>::slash(ctx, command).await,)+
                     _ => Err(anyhow!("Unknown application_command {}: {:?}", command.data.name, command)),
                 }
-                Interaction::MessageComponent(component) => match component.data.custom_id.split_once("_")
-                    // .ok_or(Result::Err(anyhow!("Invalid customId {}", component.data.custom_id)))?
-                    .unwrap()
-                    .0
+                Interaction::MessageComponent(component) => match component.data.custom_id.split_once("_").with_context(|| format!("Could not parse {:?}: {:?}", component.data.custom_id, component))?.0
                 {
                     $(<$cmd>::NAME => <$cmd>::component(ctx, component).await,)+
                     _ => Err(anyhow!("Unknown message_component {}: {:?}", component.data.custom_id, component)),
@@ -41,10 +38,6 @@ macro_rules! impl_interaction_handler {
                 #[allow(unused_variables)]
                 Interaction::Ping(ping) => todo!(),
             }
-            {
-                Err(err) => eprintln!("Command error {}", err),
-                _ => {}
-            };
         }
     };
 }
