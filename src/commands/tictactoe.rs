@@ -188,11 +188,10 @@ impl CustomCommand for TicTacToe {
             Some(clicked_coord),
         );
 
-        // If you are the challenger and its your turn, the mentions should include you AND your opponent
-        // If you are NOT the challenger, the mentions should include ONLY you
+        // It is your turn if we reach here, meaning that next_turn must be your opponents
         if match game.next_turn {
-            Player::Challenger => &interaction.user == challenger,
-            Player::Opponent => &interaction.user == opponent,
+            Player::Challenger => &interaction.user == opponent,
+            Player::Opponent => &interaction.user == challenger,
         } {
             interaction
                 .create_interaction_response(&ctx, |res| {
