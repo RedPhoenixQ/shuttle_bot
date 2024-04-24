@@ -1,9 +1,16 @@
+#[allow(unused_imports)]
 pub use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
+#[allow(unused_imports)]
 pub use serenity::async_trait;
+#[allow(unused_imports)]
 pub use serenity::builder::*;
+#[allow(unused_imports)]
 pub use serenity::model::prelude::*;
+#[allow(unused_imports)]
 pub use serenity::prelude::*;
+#[allow(unused_imports)]
 pub use serenity::utils::*;
+#[allow(unused_imports)]
 pub use tracing::{error, info};
 
 use crate::commands::*;
