@@ -10,17 +10,13 @@ const CAT_SMIRK: &str = "😼";
 impl CustomCommand for Meowify {
     const NAME: &'static str = "😼 Meowify";
 
-    fn command() -> CreateApplicationCommand {
-        CreateApplicationCommand::default()
-            .kind(command::CommandType::Message)
-            .name(Self::NAME)
+    fn command() -> CreateCommand {
+        CreateCommand::new(Self::NAME)
+            .kind(CommandType::Message)
             .to_owned()
     }
 
-    async fn slash(
-        ctx: Context,
-        command: application_command::ApplicationCommandInteraction,
-    ) -> Result<()> {
+    async fn slash(ctx: Context, command: CommandInteraction) -> Result<()> {
         // dbg!(&command.data);
 
         if let Some(msg) = command
@@ -30,9 +26,12 @@ impl CustomCommand for Meowify {
             .get(&command.data.target_id.unwrap_or(0.into()).into())
         {
             command
-                .create_interaction_response(&ctx, |r| {
-                    r.interaction_response_data(|r| r.content(meowify(&msg.content)))
-                })
+                .create_response(
+                    &ctx,
+                    CreateInteractionResponse::Message(
+                        CreateInteractionResponseMessage::new().content(meowify(&msg.content)),
+                    ),
+                )
                 .await?;
         } else {
             eprintln!("Could not find msg for interaction: {:?}", command);
@@ -45,10 +44,7 @@ impl CustomCommand for Meowify {
 impl ReactionHandler for Meowify {
     async fn reaction_add(ctx: &Context, reaction: &Reaction) -> Result<()> {
         if reaction.emoji.unicode_eq(CAT_SMIRK)
-            && reaction
-                .member
-                .as_ref()
-                .is_some_and(|m| m.user.as_ref().is_some_and(|u| u.bot))
+            && reaction.member.as_ref().is_some_and(|m| m.user.bot)
         {
             let message = reaction.message(&ctx).await?;
             message.reply(&ctx, meowify(&message.content)).await?;

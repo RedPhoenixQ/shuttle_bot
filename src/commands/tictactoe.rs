@@ -48,42 +48,43 @@ impl TicTacToe {
 #[async_trait]
 impl CustomCommand for TicTacToe {
     const NAME: &'static str = "TicTacToe";
-    fn command() -> CreateApplicationCommand {
-        CreateApplicationCommand::default()
-            .kind(command::CommandType::User)
-            .name(Self::NAME)
+    fn command() -> CreateCommand {
+        CreateCommand::new(Self::NAME)
+            .kind(CommandType::User)
             .to_owned()
     }
 
-    async fn slash(
-        ctx: Context,
-        command: application_command::ApplicationCommandInteraction,
-    ) -> Result<()> {
-        if let Some(application_command::ResolvedTarget::User(target, _)) = command.data.target() {
+    async fn slash(ctx: Context, command: CommandInteraction) -> Result<()> {
+        if let Some(ResolvedTarget::User(target, _)) = command.data.target() {
             if target.bot {
                 command
-                    .create_interaction_response(&ctx, |data| {
-                        data.interaction_response_data(|res| {
-                            res.content("You cannot challenge a bot to TicTacToe!")
-                                .ephemeral(true)
-                        })
-                    })
+                    .create_response(
+                        &ctx,
+                        CreateInteractionResponse::Message(
+                            CreateInteractionResponseMessage::new()
+                                .content("You cannot challenge a bot to TicTacToe!")
+                                .ephemeral(true),
+                        ),
+                    )
                     .await?;
             } else {
                 command
-                    .create_interaction_response(&ctx, |data| {
-                        data.interaction_response_data(|res| {
-                            res.content(
-                                MessageBuilder::default()
-                                    .mention(&target)
-                                    .push_line(" has been challenged to TicTacToe!")
-                                    .push(X_EMOJI)
-                                    .mention(&target)
-                                    .push("'s turn"),
-                            )
-                            .components(|c| create_components(c, &TicTacToe::default()))
-                        })
-                    })
+                    .create_response(
+                        &ctx,
+                        CreateInteractionResponse::Message(
+                            CreateInteractionResponseMessage::new()
+                                .content(
+                                    MessageBuilder::default()
+                                        .mention(&target.id)
+                                        .push_line(" has been challenged to TicTacToe!")
+                                        .push(X_EMOJI)
+                                        .mention(&target.id)
+                                        .push("'s turn")
+                                        .build(),
+                                )
+                                .components(create_components(&TicTacToe::default())),
+                        ),
+                    )
                     .await?;
             }
             Ok(())
@@ -92,10 +93,7 @@ impl CustomCommand for TicTacToe {
         }
     }
 
-    async fn component(
-        ctx: Context,
-        interaction: message_component::MessageComponentInteraction,
-    ) -> Result<()> {
+    async fn component(ctx: Context, interaction: ComponentInteraction) -> Result<()> {
         let challenger = &interaction
             .message
             .interaction
@@ -112,12 +110,14 @@ impl CustomCommand for TicTacToe {
                 .any(|user| user == &interaction.user)
         {
             interaction
-                .create_interaction_response(&ctx, |res| {
-                    res.interaction_response_data(|data| {
-                        data.content("You are not part of this game")
-                            .ephemeral(true)
-                    })
-                })
+                .create_response(
+                    &ctx,
+                    CreateInteractionResponse::Message(
+                        CreateInteractionResponseMessage::new()
+                            .content("You are not part of this game")
+                            .ephemeral(true),
+                    ),
+                )
                 .await?;
             return Ok(());
         };
@@ -126,11 +126,14 @@ impl CustomCommand for TicTacToe {
         if interaction.data.custom_id == REMOVE_ID {
             interaction.message.delete(&ctx).await?;
             interaction
-                .create_interaction_response(&ctx, |res| {
-                    res.interaction_response_data(|data| {
-                        data.content("The game has been removed").ephemeral(true)
-                    })
-                })
+                .create_response(
+                    &ctx,
+                    CreateInteractionResponse::Message(
+                        CreateInteractionResponseMessage::new()
+                            .content("The game has been removed")
+                            .ephemeral(true),
+                    ),
+                )
                 .await?;
             return Ok(());
         }
@@ -169,19 +172,18 @@ impl CustomCommand for TicTacToe {
                 .iter()
                 .flat_map(|row| {
                     row.components.iter().filter_map(|component| {
-                        if let component::ActionRowComponent::Button(button) = component {
-                            button.custom_id.as_ref().and_then(|custom_id| {
+                        if let ActionRowComponent::Button(button) = component {
+                            if let ButtonKind::NonLink { custom_id, .. } = &button.data {
                                 let coord = custom_id.split_once("_")?.1.try_into().ok()?;
                                 let tile = match &button.emoji {
                                     Some(e) if e.unicode_eq(X_EMOJI) => Tile::X,
                                     Some(e) if e.unicode_eq(O_EMOJI) => Tile::O,
                                     _ => Tile::Empty,
                                 };
-                                Some((coord, tile))
-                            })
-                        } else {
-                            unreachable!();
+                                return Some((coord, tile));
+                            }
                         }
+                        unreachable!();
                     })
                 })
                 .collect(),
@@ -193,49 +195,56 @@ impl CustomCommand for TicTacToe {
             Player::Challenger => &interaction.user == opponent,
             Player::Opponent => &interaction.user == challenger,
         } {
-            interaction
-                .create_interaction_response(&ctx, |res| {
-                    res.kind(InteractionResponseType::UpdateMessage)
-                        .interaction_response_data(|data| {
-                            let mut msg = MessageBuilder::default();
+            let mut msg = MessageBuilder::default();
 
-                            // Preserve first line
-                            msg.push_line(interaction.message.content.split_once("\n").unwrap().0);
+            // Preserve first line
+            msg.push_line(interaction.message.content.split_once("\n").unwrap().0);
 
-                            match &game.winning {
-                                Some(winning) => match winning {
-                                    Winning::Tie => msg.push("The game is a tie"),
-                                    _ => msg
-                                        .push(Tile::from(match game.next_turn {
-                                            Player::Opponent => Player::Challenger,
-                                            Player::Challenger => Player::Opponent,
-                                        }))
-                                        .mention(match game.next_turn {
-                                            Player::Opponent => &challenger.id,
-                                            Player::Challenger => &opponent.id,
-                                        })
-                                        .push(" is the winner!"),
-                                },
-                                None => msg
-                                    .push(Tile::from(game.next_turn))
-                                    .mention(match game.next_turn {
-                                        Player::Challenger => &challenger.id,
-                                        Player::Opponent => &opponent.id,
-                                    })
-                                    .push("'s turn"),
-                            };
-                            data.components(|c| create_components(c, &game))
-                                .content(msg)
+            match &game.winning {
+                Some(winning) => match winning {
+                    Winning::Tie => msg.push("The game is a tie"),
+                    _ => msg
+                        .push(
+                            Tile::from(match game.next_turn {
+                                Player::Opponent => Player::Challenger,
+                                Player::Challenger => Player::Opponent,
+                            })
+                            .to_string(),
+                        )
+                        .mention(match game.next_turn {
+                            Player::Opponent => &challenger.id,
+                            Player::Challenger => &opponent.id,
                         })
-                })
+                        .push(" is the winner!"),
+                },
+                None => msg
+                    .push(Tile::from(game.next_turn).to_string())
+                    .mention(match game.next_turn {
+                        Player::Challenger => &challenger.id,
+                        Player::Opponent => &opponent.id,
+                    })
+                    .push("'s turn"),
+            };
+            interaction
+                .create_response(
+                    &ctx,
+                    CreateInteractionResponse::UpdateMessage(
+                        CreateInteractionResponseMessage::new()
+                            .content(msg.build())
+                            .components(create_components(&game)),
+                    ),
+                )
                 .await?;
         } else {
             interaction
-                .create_interaction_response(&ctx, |res| {
-                    res.interaction_response_data(|data| {
-                        data.content("Its not your turn").ephemeral(true)
-                    })
-                })
+                .create_response(
+                    &ctx,
+                    CreateInteractionResponse::UpdateMessage(
+                        CreateInteractionResponseMessage::new()
+                            .content("Its not your turn")
+                            .ephemeral(true),
+                    ),
+                )
                 .await?;
         };
         Ok(())
@@ -421,40 +430,36 @@ fn calculate_winner(state: &HashMap<Coord, Tile>) -> Option<Winning> {
     }
 }
 
-fn create_components<'a, 'b>(
-    components: &'a mut CreateComponents,
-    game: &'b TicTacToe,
-) -> &'a mut CreateComponents {
-    COMPONENT_ROWS.into_iter().for_each(|row| {
-        components.create_action_row(|action_row| {
-            COMPONENT_COLUMNS.into_iter().for_each(|col| {
-                action_row.create_button(|button| {
-                    let coord = Coord(row, col);
-                    let tile = game.state.get(&coord).unwrap_or(&Tile::Empty);
-                    button
-                        .disabled(*tile != Tile::Empty || game.winning.is_some())
-                        .style(match &game.winning {
-                            Some(value) => get_style(&coord, value),
-                            None => component::ButtonStyle::Secondary,
-                        })
-                        .custom_id(&coord)
-                        .emoji(ReactionType::Unicode(tile.to_string()))
-                });
-            });
-            action_row
-        });
-    });
-    components.create_action_row(|row| {
-        row.create_button(|btn| {
-            btn.custom_id(REMOVE_ID)
-                .label("Remove")
-                .style(component::ButtonStyle::Danger)
+fn create_components(game: &TicTacToe) -> Vec<CreateActionRow> {
+    COMPONENT_ROWS
+        .into_iter()
+        .map(|row| {
+            CreateActionRow::Buttons(
+                COMPONENT_COLUMNS
+                    .into_iter()
+                    .map(|col| {
+                        let coord = Coord(row, col);
+                        let tile = game.state.get(&coord).unwrap_or(&Tile::Empty);
+                        CreateButton::new(coord.to_string())
+                            .disabled(*tile != Tile::Empty || game.winning.is_some())
+                            .style(match &game.winning {
+                                Some(value) => get_style(&coord, value),
+                                None => ButtonStyle::Secondary,
+                            })
+                            .emoji(ReactionType::Unicode(tile.to_string()))
+                    })
+                    .collect(),
+            )
         })
-    });
-    components
+        .chain((0..).into_iter().map(|_| {
+            CreateActionRow::Buttons(vec![CreateButton::new(REMOVE_ID)
+                .label("Remove")
+                .style(ButtonStyle::Danger)])
+        }))
+        .collect()
 }
 
-fn get_style(id: &Coord, value: &Winning) -> component::ButtonStyle {
+fn get_style(id: &Coord, value: &Winning) -> ButtonStyle {
     if match value {
         Winning::Vertical(col) => id.1 == *col,
         Winning::Horizontal(row) => id.0 == *row,
@@ -476,8 +481,8 @@ fn get_style(id: &Coord, value: &Winning) -> component::ButtonStyle {
         },
         Winning::Tie => false,
     } {
-        component::ButtonStyle::Success
+        ButtonStyle::Success
     } else {
-        component::ButtonStyle::Secondary
+        ButtonStyle::Secondary
     }
 }

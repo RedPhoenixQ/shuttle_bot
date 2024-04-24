@@ -14,7 +14,7 @@ pub mod tictactoe;
 
 macro_rules! impl_interaction_handler {
     ($($cmd:ty),+) => {
-        pub fn command_list() -> Vec<serenity::builder::CreateApplicationCommand> {
+        pub fn command_list() -> Vec<CreateCommand> {
             vec![
                 $(<$cmd>::command(),)+
             ]
@@ -22,21 +22,22 @@ macro_rules! impl_interaction_handler {
 
         pub async fn handle_interaction(ctx: Context, interaction: Interaction) -> Result<()> {
             match interaction {
-                Interaction::ApplicationCommand(command) => match command.data.name.as_str() {
+                Interaction::Command(command) => match command.data.name.as_str() {
                     $(<$cmd>::NAME => <$cmd>::slash(ctx, command).await,)+
                     _ => Err(anyhow!("Unknown application_command {}: {:?}", command.data.name, command)),
                 }
-                Interaction::MessageComponent(component) => match component.data.custom_id.split_once("_").with_context(|| format!("Could not parse {:?}: {:?}", component.data.custom_id, component))?.0
+                Interaction::Component(component) => match component.data.custom_id.split_once("_").with_context(|| format!("Could not parse {:?}: {:?}", component.data.custom_id, component))?.0
                 {
                     $(<$cmd>::NAME => <$cmd>::component(ctx, component).await,)+
                     _ => Err(anyhow!("Unknown message_component {}: {:?}", component.data.custom_id, component)),
                 },
                 #[allow(unused_variables)]
-                Interaction::ModalSubmit(submit) => todo!(),
+                Interaction::Modal(submit) => todo!(),
                 #[allow(unused_variables)]
                 Interaction::Autocomplete(autocomplete) => todo!(),
                 #[allow(unused_variables)]
                 Interaction::Ping(ping) => todo!(),
+                _ => todo!(),
             }
         }
     };
@@ -55,25 +56,19 @@ impl_interaction_handler!(
 pub trait CustomCommand {
     /// Must be all lowercase for application commands
     const NAME: &'static str;
-    fn command() -> CreateApplicationCommand;
+    fn command() -> CreateCommand;
 
-    async fn component(
-        ctx: Context,
-        component: message_component::MessageComponentInteraction,
-    ) -> Result<()> {
+    async fn component(ctx: Context, component: ComponentInteraction) -> Result<()> {
         Err(anyhow!("Component not implemented for {}", Self::NAME))
     }
 
-    async fn slash(
-        ctx: Context,
-        command: application_command::ApplicationCommandInteraction,
-    ) -> Result<()> {
+    async fn slash(ctx: Context, command: CommandInteraction) -> Result<()> {
         Err(anyhow!("Slash not implemented for {}", Self::NAME))
     }
 }
 
 // #[async_trait]
 // pub trait InteractionHandler {
-//     fn command_list(&self) -> Vec<CreateApplicationCommand>;
+//     fn command_list(&self) -> Vec<CreateCommand>;
 //     async fn handle_interaction(&self, ctx: Context, interaction: Interaction);
 // }

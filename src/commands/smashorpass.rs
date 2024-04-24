@@ -6,49 +6,44 @@ pub struct SmashOrPass;
 impl CustomCommand for SmashOrPass {
     const NAME: &'static str = "smashorpass";
 
-    fn command() -> CreateApplicationCommand {
-        CreateApplicationCommand::default()
-            .name(Self::NAME)
-            .create_option(|o| {
-                o.name("name")
-                    .description("Name of candidate")
-                    .kind(command::CommandOptionType::String)
-                    .required(true)
-            })
+    fn command() -> CreateCommand {
+        CreateCommand::new(Self::NAME)
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::String, "name", "Name of candidate")
+                    .required(true),
+            )
             .description("Provide a name to smash or pass")
             .to_owned()
     }
 
-    async fn slash(
-        ctx: Context,
-        command: application_command::ApplicationCommandInteraction,
-    ) -> Result<()> {
+    async fn slash(ctx: Context, command: CommandInteraction) -> Result<()> {
         command
-            .create_interaction_response(&ctx, |response| {
-                if let Some(candidate) = command
-                    .data
-                    .options
-                    .get(0)
-                    .and_then(|option| option.value.as_ref().and_then(|v| v.as_str()))
-                {
-                    response.interaction_response_data(|msg| {
-                        msg.content(
+            .create_response(
+                &ctx,
+                CreateInteractionResponse::Message(
+                    if let Some(candidate) = command
+                        .data
+                        .options
+                        .get(0)
+                        .and_then(|option| option.value.as_str())
+                    {
+                        CreateInteractionResponseMessage::new().content(
                             MessageBuilder::default()
                                 .push("Smash or Pass: ")
                                 .push_bold(candidate)
                                 .build(),
                         )
-                    })
-                } else {
-                    response.interaction_response_data(|msg| {
-                        msg.content("No candidate given").ephemeral(true)
-                    })
-                }
-            })
+                    } else {
+                        CreateInteractionResponseMessage::new()
+                            .content("No candidate given")
+                            .ephemeral(true)
+                    },
+                ),
+            )
             .await
             .unwrap();
 
-        let response = command.get_interaction_response(&ctx).await?;
+        let response = command.get_response(&ctx).await?;
         println!("response in callback {:?}", &response);
         let smash_react = response.react(&ctx, '🥵').await;
         let pass_react = response.react(&ctx, '😒').await;

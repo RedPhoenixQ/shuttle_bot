@@ -3,7 +3,7 @@ use anyhow::anyhow;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::{async_trait, json::json, model::prelude::GuildId};
-use shuttle_secrets::SecretStore;
+use shuttle_runtime::SecretStore;
 use tracing::{error, info};
 
 mod commands;
@@ -38,10 +38,8 @@ impl EventHandler for Handler {
         match &self.dev_guild_ids {
             Some(guildids) => {
                 for guild in guildids {
-                    GuildId(*guild)
-                        .set_application_commands(&ctx.http, |c| {
-                            c.set_application_commands(commands.clone())
-                        })
+                    GuildId::new(*guild)
+                        .set_commands(&ctx.http, commands.clone())
                         .await
                         .expect("Could not set commands");
                 }
@@ -51,28 +49,19 @@ impl EventHandler for Handler {
             None => {
                 let current_commands = ctx
                     .http
-                    .get_global_application_commands()
+                    .get_global_commands()
                     .await
                     .expect("Could not fetch current commands");
 
-                for c in current_commands {
-                    if commands.iter().any(|c| c.0.get("name") == c.0.get("name")) {
-                        match ctx
-                            .http
-                            .delete_global_application_command(c.id.as_u64().to_owned())
-                            .await
-                        {
-                            Err(err) => error!("{}", anyhow::format_err!(err)),
-                            _ => {}
-                        }
+                for current in current_commands {
+                    match ctx.http.delete_global_command(current.id).await {
+                        Err(err) => error!("{}", anyhow::format_err!(err)),
+                        _ => {}
                     }
                 }
 
                 ctx.http
-                    .create_global_application_commands(&json!(commands
-                        .iter()
-                        .map(|c| c.0.clone())
-                        .collect::<Vec<_>>()))
+                    .create_global_commands(&json!(commands.iter().collect::<Vec<_>>()))
                     .await
                     .expect("Could not set global applications commands");
 
@@ -107,7 +96,7 @@ impl EventHandler for Handler {
 
 #[shuttle_runtime::main]
 async fn serenity(
-    #[shuttle_secrets::Secrets] secret_store: SecretStore,
+    #[shuttle_runtime::Secrets] secret_store: SecretStore,
 ) -> shuttle_serenity::ShuttleSerenity {
     // Get the discord token set in `Secrets.toml`
     let token = if let Some(token) = secret_store.get("DISCORD_TOKEN") {
