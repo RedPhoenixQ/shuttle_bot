@@ -33,13 +33,12 @@ struct Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        let commands = commands::command_list();
         info!("Ready event triggered");
         match &self.dev_guild_ids {
             Some(guildids) => {
                 for guild in guildids {
                     GuildId::new(*guild)
-                        .set_commands(&ctx.http, commands.clone())
+                        .set_commands(&ctx.http, commands::command_list())
                         .await
                         .expect("Could not set commands");
                 }
@@ -61,7 +60,9 @@ impl EventHandler for Handler {
                 }
 
                 ctx.http
-                    .create_global_commands(&json!(commands.iter().collect::<Vec<_>>()))
+                    .create_global_commands(&json!(commands::command_list()
+                        .iter()
+                        .collect::<Vec<_>>()))
                     .await
                     .expect("Could not set global applications commands");
 
