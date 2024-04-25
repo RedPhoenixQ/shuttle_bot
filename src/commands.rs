@@ -19,54 +19,49 @@ pub mod purge;
 pub mod smashorpass;
 pub mod tictactoe;
 
-macro_rules! impl_interaction_handler {
-    ($($cmd:ty),+) => {
-        pub fn command_list() -> Vec<CreateCommand> {
-            vec![
-                $(<$cmd>::command(),)+
-            ]
-        }
-
-        pub async fn handle_interaction(ctx: Context, interaction: Interaction) -> Result<()> {
-            match interaction {
-                Interaction::Command(command) => match command.data.name.as_str() {
-                    $(<$cmd>::NAME => <$cmd>::slash(ctx, command).await,)+
-                    _ => Err(anyhow!("Unknown application_command {}: {:?}", command.data.name, command)),
-                }
-                Interaction::Component(component) => match component.data.custom_id
-                    .split_once("_")
-                    .and_then(|(s, _)| Some(s))
-                    .unwrap_or(&component.data.custom_id)
-                {
-                    $(<$cmd>::NAME => <$cmd>::component(ctx, component).await,)+
-                    _ => Err(anyhow!("Unknown message_component {}: {:?}", component.data.custom_id, component)),
-                },
-                #[allow(unused_variables)]
-                Interaction::Modal(submit) => match submit.data.custom_id
-                    .split_once("_")
-                    .and_then(|(s, _)| Some(s))
-                    .unwrap_or(&submit.data.custom_id)
-            {
-                $(<$cmd>::NAME => <$cmd>::modal(ctx, submit).await,)+
-                _ => Err(anyhow!("Unknown modal_component {}: {:?}", submit.data.custom_id, submit )),
-            },
-                #[allow(unused_variables)]
-                Interaction::Autocomplete(autocomplete) => todo!(),
-                #[allow(unused_variables)]
-                Interaction::Ping(ping) => todo!(),
-                _ => todo!(),
-            }
-        }
-    };
+pub fn command_list() -> Vec<CreateCommand> {
+    vec![
+        hello::Hello::command(),
+        meow::Meowify::command(),
+        purge::Purge::command(),
+        smashorpass::SmashOrPass::command(),
+        tictactoe::TicTacToe::command(),
+    ]
 }
 
-impl_interaction_handler!(
-    hello::Hello,
-    meow::Meowify,
-    purge::Purge,
-    smashorpass::SmashOrPass,
-    tictactoe::TicTacToe
-);
+pub async fn handle_interaction(ctx: Context, interaction: Interaction) -> Result<()> {
+    let name = match &interaction {
+        Interaction::Command(command) => command.data.name.as_str(),
+        Interaction::Component(component) => component
+            .data
+            .custom_id
+            .split_once("_")
+            .and_then(|(s, _)| Some(s))
+            .unwrap_or(&component.data.custom_id),
+        Interaction::Modal(submit) => submit
+            .data
+            .custom_id
+            .split_once("_")
+            .and_then(|(s, _)| Some(s))
+            .unwrap_or(&submit.data.custom_id),
+        Interaction::Autocomplete(command) => command.data.name.as_str(),
+        Interaction::Ping(_ping) => todo!(),
+        _ => todo!(),
+    };
+
+    match name {
+        hello::Hello::NAME => hello::Hello::handle_interaction(ctx, interaction).await,
+        meow::Meowify::NAME => meow::Meowify::handle_interaction(ctx, interaction).await,
+        purge::Purge::NAME => purge::Purge::handle_interaction(ctx, interaction).await,
+        smashorpass::SmashOrPass::NAME => {
+            smashorpass::SmashOrPass::handle_interaction(ctx, interaction).await
+        }
+        tictactoe::TicTacToe::NAME => {
+            tictactoe::TicTacToe::handle_interaction(ctx, interaction).await
+        }
+        _ => Err(anyhow!("No handler found for {}:\n{:?}", name, interaction)),
+    }
+}
 
 #[allow(unused_variables)]
 #[async_trait]
@@ -74,6 +69,18 @@ pub trait CustomCommand {
     /// Must be all lowercase for application commands
     const NAME: &'static str;
     fn command() -> CreateCommand;
+
+    async fn handle_interaction(ctx: Context, interaction: Interaction) -> Result<()> {
+        match interaction {
+            Interaction::Command(command) => Self::slash(ctx, command),
+            Interaction::Component(component) => Self::component(ctx, component),
+            Interaction::Modal(submit) => Self::modal(ctx, submit),
+            Interaction::Autocomplete(autocomplete) => todo!(),
+            Interaction::Ping(ping) => todo!(),
+            _ => todo!(),
+        }
+        .await
+    }
 
     async fn component(ctx: Context, component: ComponentInteraction) -> Result<()> {
         Err(anyhow!("Component not implemented for {}", Self::NAME))
