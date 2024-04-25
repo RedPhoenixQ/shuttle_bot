@@ -33,7 +33,10 @@ macro_rules! impl_interaction_handler {
                     $(<$cmd>::NAME => <$cmd>::slash(ctx, command).await,)+
                     _ => Err(anyhow!("Unknown application_command {}: {:?}", command.data.name, command)),
                 }
-                Interaction::Component(component) => match component.data.custom_id.split_once("_").with_context(|| format!("Could not parse {:?}: {:?}", component.data.custom_id, component))?.0
+                Interaction::Component(component) => match component.data.custom_id
+                    .split_once("_")
+                    .and_then(|(s, _)| Some(s))
+                    .unwrap_or(&component.data.custom_id)
                 {
                     $(<$cmd>::NAME => <$cmd>::component(ctx, component).await,)+
                     _ => Err(anyhow!("Unknown message_component {}: {:?}", component.data.custom_id, component)),
