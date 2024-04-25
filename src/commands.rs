@@ -17,10 +17,14 @@ pub mod hello;
 pub mod meow;
 pub mod purge;
 pub mod smashorpass;
+#[cfg(debug_assertions)]
+pub mod test;
 pub mod tictactoe;
 
 pub fn command_list() -> Vec<CreateCommand> {
     vec![
+        #[cfg(debug_assertions)]
+        test::Test::command(),
         hello::Hello::command(),
         meow::Meowify::command(),
         purge::Purge::command(),
@@ -50,6 +54,8 @@ pub async fn handle_interaction(ctx: Context, interaction: Interaction) -> Resul
     };
 
     match name {
+        #[cfg(debug_assertions)]
+        test::Test::NAME => test::Test::handle_interaction(ctx, interaction).await,
         hello::Hello::NAME => hello::Hello::handle_interaction(ctx, interaction).await,
         meow::Meowify::NAME => meow::Meowify::handle_interaction(ctx, interaction).await,
         purge::Purge::NAME => purge::Purge::handle_interaction(ctx, interaction).await,
