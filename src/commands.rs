@@ -42,7 +42,14 @@ macro_rules! impl_interaction_handler {
                     _ => Err(anyhow!("Unknown message_component {}: {:?}", component.data.custom_id, component)),
                 },
                 #[allow(unused_variables)]
-                Interaction::Modal(submit) => todo!(),
+                Interaction::Modal(submit) => match submit.data.custom_id
+                    .split_once("_")
+                    .and_then(|(s, _)| Some(s))
+                    .unwrap_or(&submit.data.custom_id)
+            {
+                $(<$cmd>::NAME => <$cmd>::modal(ctx, submit).await,)+
+                _ => Err(anyhow!("Unknown modal_component {}: {:?}", submit.data.custom_id, submit )),
+            },
                 #[allow(unused_variables)]
                 Interaction::Autocomplete(autocomplete) => todo!(),
                 #[allow(unused_variables)]
@@ -74,6 +81,10 @@ pub trait CustomCommand {
 
     async fn slash(ctx: Context, command: CommandInteraction) -> Result<()> {
         Err(anyhow!("Slash not implemented for {}", Self::NAME))
+    }
+
+    async fn modal(ctx: Context, submit: ModalInteraction) -> Result<()> {
+        Err(anyhow!("Modal not implemented for {}", Self::NAME))
     }
 }
 
