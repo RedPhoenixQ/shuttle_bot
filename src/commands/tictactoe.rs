@@ -239,7 +239,7 @@ impl CustomCommand for TicTacToe {
             interaction
                 .create_response(
                     &ctx,
-                    CreateInteractionResponse::UpdateMessage(
+                    CreateInteractionResponse::Message(
                         CreateInteractionResponseMessage::new()
                             .content("Its not your turn")
                             .ephemeral(true),
