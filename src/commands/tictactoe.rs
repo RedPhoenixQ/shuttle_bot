@@ -146,8 +146,7 @@ impl CustomCommand for TicTacToe {
             interaction
                 .message
                 .mentions
-                .iter()
-                .next()
+                .first()
                 .ok_or(anyhow!("There was no mentions"))?
         } else {
             interaction

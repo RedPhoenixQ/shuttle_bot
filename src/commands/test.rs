@@ -45,9 +45,8 @@ impl CustomCommand for Test {
         for row in &submit.data.components {
             for component in &row.components {
                 info!("Component in submit: {:?}", component);
-                match component {
-                    ActionRowComponent::InputText(input) => verified.push(input.value.clone()),
-                    _ => {}
+                if let ActionRowComponent::InputText(input) = component {
+                    verified.push(input.value.clone())
                 };
             }
         }

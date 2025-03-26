@@ -42,13 +42,13 @@ pub async fn handle_interaction(ctx: Context, interaction: Interaction) -> Resul
             .data
             .custom_id
             .split_once("_")
-            .and_then(|(s, _)| Some(s))
+            .map(|(s, _)| s)
             .unwrap_or(&component.data.custom_id),
         Interaction::Modal(submit) => submit
             .data
             .custom_id
             .split_once("_")
-            .and_then(|(s, _)| Some(s))
+            .map(|(s, _)| s)
             .unwrap_or(&submit.data.custom_id),
         Interaction::Autocomplete(command) => command.data.name.as_str(),
         Interaction::Ping(_ping) => todo!(),

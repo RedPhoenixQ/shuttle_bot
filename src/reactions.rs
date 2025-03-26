@@ -23,9 +23,8 @@ pub trait ReactionHandler {
 
 pub async fn handle_reaction_add(ctx: Context, reaction: Reaction) {
     for handler in [meow::Meowify::reaction_add] {
-        match handler(&ctx, &reaction).await {
-            Err(err) => error!("{}", err),
-            _ => {}
+        if let Err(err) = handler(&ctx, &reaction).await {
+            error!("{}", err)
         };
     }
 }

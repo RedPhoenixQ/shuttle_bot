@@ -29,7 +29,7 @@ impl CustomCommand for Purge {
             .expect("amount option to exist")
             .value
             .as_i64()
-            .and_then(|n| Some((n % u8::MAX as i64) as u8));
+            .map(|n| (n % u8::MAX as i64) as u8);
 
         let messages = ctx
             .http

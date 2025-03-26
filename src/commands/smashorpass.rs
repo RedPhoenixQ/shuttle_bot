@@ -24,7 +24,7 @@ impl CustomCommand for SmashOrPass {
                     if let Some(candidate) = command
                         .data
                         .options
-                        .get(0)
+                        .first()
                         .and_then(|option| option.value.as_str())
                     {
                         CreateInteractionResponseMessage::new().content(

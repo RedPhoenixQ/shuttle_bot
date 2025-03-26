@@ -53,9 +53,8 @@ impl EventHandler for Handler {
                     .expect("Could not fetch current commands");
 
                 for current in current_commands {
-                    match ctx.http.delete_global_command(current.id).await {
-                        Err(err) => error!("{}", anyhow::format_err!(err)),
-                        _ => {}
+                    if let Err(err) = ctx.http.delete_global_command(current.id).await {
+                        error!("{}", anyhow::format_err!(err))
                     }
                 }
 
@@ -114,13 +113,11 @@ async fn serenity(
 
     let client = Client::builder(&token, intents)
         .event_handler(Handler {
-            dev_guild_ids: secret_store.get("DISCORD_GUILD_ID").and_then(|guilds| {
-                Some(
-                    guilds
-                        .split_terminator(',')
-                        .filter_map(|id| id.parse::<u64>().ok())
-                        .collect::<Vec<_>>(),
-                )
+            dev_guild_ids: secret_store.get("DISCORD_GUILD_ID").map(|guilds| {
+                guilds
+                    .split_terminator(',')
+                    .filter_map(|id| id.parse::<u64>().ok())
+                    .collect::<Vec<_>>()
             }),
         })
         .await
