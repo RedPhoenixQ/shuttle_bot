@@ -20,6 +20,7 @@ pub mod smashorpass;
 #[cfg(debug_assertions)]
 pub mod test;
 pub mod tictactoe;
+pub mod week_planner;
 
 pub fn command_list() -> Vec<CreateCommand> {
     vec![
@@ -30,6 +31,7 @@ pub fn command_list() -> Vec<CreateCommand> {
         purge::Purge::command(),
         smashorpass::SmashOrPass::command(),
         tictactoe::TicTacToe::command(),
+        week_planner::WeekPlanner::command(),
     ]
 }
 
@@ -64,6 +66,9 @@ pub async fn handle_interaction(ctx: Context, interaction: Interaction) -> Resul
         }
         tictactoe::TicTacToe::NAME => {
             tictactoe::TicTacToe::handle_interaction(ctx, interaction).await
+        }
+        week_planner::WeekPlanner::NAME => {
+            week_planner::WeekPlanner::handle_interaction(ctx, interaction).await
         }
         _ => Err(anyhow!("No handler found for {}:\n{:?}", name, interaction)),
     }
