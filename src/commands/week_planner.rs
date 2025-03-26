@@ -21,7 +21,9 @@ impl CustomCommand for WeekPlanner {
             .create_response(
                 &ctx,
                 CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new().content("New week planner"),
+                    CreateInteractionResponseMessage::new()
+                        .content("New week planner")
+                        .ephemeral(true),
                 ),
             )
             .await?;
