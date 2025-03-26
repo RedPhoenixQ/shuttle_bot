@@ -94,12 +94,16 @@ impl CustomCommand for TicTacToe {
     }
 
     async fn component(ctx: Context, interaction: ComponentInteraction) -> Result<()> {
-        let challenger = &interaction
-            .message
-            .interaction
-            .as_ref()
-            .ok_or(anyhow!("There was no interaction on the message"))?
-            .user;
+        let Some(ref interaction_metadata) = interaction.message.interaction_metadata else {
+            bail!("There was no interaction on the message");
+        };
+        let MessageInteractionMetadata::Command(MessageCommandInteractionMetadata {
+            user: challenger,
+            ..
+        }) = interaction_metadata.as_ref()
+        else {
+            bail!("There was no interaction on the message");
+        };
 
         // Check if user is not part of the game
         if &interaction.user != challenger
