@@ -17,25 +17,17 @@ impl CustomCommand for Meowify {
     }
 
     async fn slash(ctx: Context, command: CommandInteraction) -> Result<()> {
-        // dbg!(&command.data);
-
-        if let Some(msg) = command
-            .data
-            .resolved
-            .messages
-            .get(&command.data.target_id.unwrap_or(0.into()).into())
-        {
-            command
-                .create_response(
-                    &ctx,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new().content(meowify(&msg.content)),
-                    ),
-                )
-                .await?;
-        } else {
-            eprintln!("Could not find msg for interaction: {:?}", command);
-        }
+        let Some(ResolvedTarget::Message(msg)) = command.data.target() else {
+            bail!("Could not find msg for interaction: {:?}", command);
+        };
+        command
+            .create_response(
+                &ctx,
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new().content(meowify(&msg.content)),
+                ),
+            )
+            .await?;
         Ok(())
     }
 }
