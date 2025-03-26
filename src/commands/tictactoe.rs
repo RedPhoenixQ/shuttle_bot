@@ -451,11 +451,11 @@ fn create_components(game: &TicTacToe) -> Vec<CreateActionRow> {
                     .collect(),
             )
         })
-        .chain((0..).into_iter().map(|_| {
-            CreateActionRow::Buttons(vec![CreateButton::new(REMOVE_ID)
+        .chain(std::iter::once(CreateActionRow::Buttons(vec![
+            CreateButton::new(REMOVE_ID)
                 .label("Remove")
-                .style(ButtonStyle::Danger)])
-        }))
+                .style(ButtonStyle::Danger),
+        ])))
         .collect()
 }
 
