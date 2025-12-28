@@ -1,9 +1,8 @@
-use anyhow::anyhow;
-// use serenity::model::channel::Message;
+use std::env;
+
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::{async_trait, json::json, model::prelude::GuildId};
-use shuttle_runtime::SecretStore;
 use tracing::{error, info};
 
 mod commands;
@@ -94,16 +93,18 @@ impl EventHandler for Handler {
     }
 }
 
-#[shuttle_runtime::main]
-async fn serenity(
-    #[shuttle_runtime::Secrets] secret_store: SecretStore,
-) -> shuttle_serenity::ShuttleSerenity {
+#[tokio::main]
+async fn main() -> () {
     // Get the discord token set in `Secrets.toml`
-    let token = if let Some(token) = secret_store.get("DISCORD_TOKEN") {
-        token
-    } else {
-        return Err(anyhow!("'DISCORD_TOKEN' was not found").into());
-    };
+    let token = env::var("DISCORD_TOKEN").expect("'DISCORD_TOKEN' was not found");
+    let dev_guild_ids = env::var("DISCORD_GUILD_ID")
+        .map(|guilds| {
+            guilds
+                .split_terminator(',')
+                .filter_map(|id| id.parse::<u64>().ok())
+                .collect::<Vec<_>>()
+        })
+        .ok();
 
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILDS
@@ -111,17 +112,12 @@ async fn serenity(
         | GatewayIntents::GUILD_MESSAGE_REACTIONS
         | GatewayIntents::MESSAGE_CONTENT;
 
-    let client = Client::builder(&token, intents)
-        .event_handler(Handler {
-            dev_guild_ids: secret_store.get("DISCORD_GUILD_ID").map(|guilds| {
-                guilds
-                    .split_terminator(',')
-                    .filter_map(|id| id.parse::<u64>().ok())
-                    .collect::<Vec<_>>()
-            }),
-        })
+    let mut client = Client::builder(&token, intents)
+        .event_handler(Handler { dev_guild_ids })
         .await
         .expect("Err creating client");
 
-    Ok(client.into())
+    if let Err(why) = client.start().await {
+        println!("Err with client: {:?}", why);
+    }
 }
