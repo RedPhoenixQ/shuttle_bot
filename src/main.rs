@@ -2,7 +2,7 @@ use std::env;
 
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-use serenity::{async_trait, json::json, model::prelude::GuildId};
+use serenity::{async_trait, model::prelude::GuildId};
 use tracing::{error, info};
 
 mod commands;
@@ -58,9 +58,7 @@ impl EventHandler for Handler {
                 }
 
                 ctx.http
-                    .create_global_commands(&json!(commands::command_list()
-                        .iter()
-                        .collect::<Vec<_>>()))
+                    .create_global_commands(&commands::command_list())
                     .await
                     .expect("Could not set global applications commands");
 
